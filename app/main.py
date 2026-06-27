@@ -11,7 +11,7 @@ from app.core.security import hash_password
 from app.db.session import Base, SessionLocal, engine
 from app.models import models  # noqa: F401 ensures models are registered
 from app.models.models import ShopStatus, User, UserRole
-from app.routers import admin, auth, clients, invoices, products
+from app.routers import admin, auth, categories, clients, invoices, products
 
 app = FastAPI(title="Sunu Boutik API")
 
@@ -48,6 +48,7 @@ async def security_headers(request: Request, call_next):
 
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(categories.router)
 app.include_router(products.router)
 app.include_router(clients.router)
 app.include_router(invoices.router)

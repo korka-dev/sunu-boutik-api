@@ -107,22 +107,52 @@ class ShopListOut(BaseModel):
     total_pages: int
 
 
+# ---------- Categories ----------
+
+class CategoryCreate(BaseModel):
+    name: str
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+
+
+class CategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    created_at: datetime
+
+
+class CategoryListOut(BaseModel):
+    items: list[CategoryOut]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
 # ---------- Products ----------
 
 class ProductCreate(BaseModel):
     name: str
+    category_id: int
     reference: Optional[str] = None
     unit_price: float
     quantity: float = 0
     unit: str = "unite"
+    pack_size: float = 1
 
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
+    category_id: Optional[int] = None
     reference: Optional[str] = None
     unit_price: Optional[float] = None
     quantity: Optional[float] = None
     unit: Optional[str] = None
+    pack_size: Optional[float] = None
 
 
 class ProductOut(BaseModel):
@@ -130,10 +160,13 @@ class ProductOut(BaseModel):
 
     id: int
     name: str
+    category_id: int
+    category_name: str
     reference: Optional[str] = None
     unit_price: float
     quantity: float
     unit: str
+    pack_size: float
     created_at: datetime
 
 

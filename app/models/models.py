@@ -34,6 +34,7 @@ class Shop(Base):
     reviewed_at = Column(DateTime, nullable=True)
 
     users = relationship("User", back_populates="shop", cascade="all, delete-orphan")
+    categories = relationship("Category", back_populates="shop", cascade="all, delete-orphan")
     products = relationship("Product", back_populates="shop", cascade="all, delete-orphan")
     clients = relationship("Client", back_populates="shop", cascade="all, delete-orphan")
     invoices = relationship("Invoice", back_populates="shop", cascade="all, delete-orphan")
@@ -55,19 +56,34 @@ class User(Base):
     shop = relationship("Shop", back_populates="users")
 
 
+class Category(Base):
+    __tablename__ = "categories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    shop_id = Column(Integer, ForeignKey("shops.id"), nullable=False, index=True)
+    name = Column(String(150), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    shop = relationship("Shop", back_populates="categories")
+    products = relationship("Product", back_populates="category")
+
+
 class Product(Base):
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
     shop_id = Column(Integer, ForeignKey("shops.id"), nullable=False, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
     name = Column(String(200), nullable=False)
     reference = Column(String(100), nullable=True)
     unit_price = Column(Float, nullable=False, default=0)
     quantity = Column(Float, nullable=False, default=0)
     unit = Column(String(20), default="unite")
+    pack_size = Column(Float, nullable=False, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     shop = relationship("Shop", back_populates="products")
+    category = relationship("Category", back_populates="products")
 
 
 class Client(Base):
