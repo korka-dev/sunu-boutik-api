@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -141,6 +141,7 @@ def shop_stats(shop_id: int, db: Session = Depends(get_db), _admin: User = Depen
 @router.post("/shops/{shop_id}/approve", response_model=ShopAdminOut)
 def approve_shop(
     shop_id: int,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
@@ -165,8 +166,9 @@ def approve_shop(
     db.commit()
 
     if owner:
+        origin = request.headers.get("origin")
         background_tasks.add_task(
-            send_shop_approved_email, owner.full_name, owner.email, shop.name, temp_password
+            send_shop_approved_email, owner.full_name, owner.email, shop.name, temp_password, origin
         )
 
     return _to_shop_admin_out(shop, db)
@@ -176,6 +178,7 @@ def approve_shop(
 def reject_shop(
     shop_id: int,
     payload: RejectRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
@@ -191,6 +194,9 @@ def reject_shop(
 
     owner = _owner_of(shop, db)
     if owner:
-        background_tasks.add_task(send_shop_rejected_email, owner.full_name, owner.email, shop.name, payload.reason)
+        origin = request.headers.get("origin")
+        background_tasks.add_task(
+            send_shop_rejected_email, owner.full_name, owner.email, shop.name, payload.reason, origin
+        )
 
     return _to_shop_admin_out(shop, db)

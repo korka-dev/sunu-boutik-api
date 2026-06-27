@@ -89,8 +89,11 @@ def send_email(to_email: str, to_name: str, subject: str, html_content: str) -> 
         logger.error("Erreur réseau lors de l'envoi de l'email: %s", exc)
 
 
-def send_signup_pending_emails(shop_name: str, owner_name: str, owner_email: str) -> None:
-    login_url = f"{settings.FRONTEND_URL}/login"
+def send_signup_pending_emails(
+    shop_name: str, owner_name: str, owner_email: str, frontend_url: str | None = None
+) -> None:
+    base_url = frontend_url or settings.FRONTEND_URL
+    login_url = f"{base_url}/login"
     client_html = _layout(
         title="Votre demande est en cours de traitement",
         intro=f"Bonjour {owner_name},",
@@ -106,7 +109,7 @@ def send_signup_pending_emails(shop_name: str, owner_name: str, owner_email: str
     send_email(owner_email, owner_name, "Votre demande est en cours de traitement", client_html)
 
     if settings.ADMIN_EMAIL:
-        admin_url = f"{settings.FRONTEND_URL}/admin/login"
+        admin_url = f"{base_url}/admin/login"
         admin_html = _layout(
             title="Nouvelle demande de boutique à valider",
             intro="Une nouvelle boutique attend votre validation.",
@@ -123,8 +126,14 @@ def send_signup_pending_emails(shop_name: str, owner_name: str, owner_email: str
         send_email(settings.ADMIN_EMAIL, "Admin", "Nouvelle demande de boutique à valider", admin_html)
 
 
-def send_shop_approved_email(owner_name: str, owner_email: str, shop_name: str, temp_password: str) -> None:
-    login_url = f"{settings.FRONTEND_URL}/login"
+def send_shop_approved_email(
+    owner_name: str,
+    owner_email: str,
+    shop_name: str,
+    temp_password: str,
+    frontend_url: str | None = None,
+) -> None:
+    login_url = f"{frontend_url or settings.FRONTEND_URL}/login"
     credentials_box = f"""
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
            style="background-color:#f3f4f6; border-radius:8px; margin:16px 0;">
@@ -159,8 +168,14 @@ def send_shop_approved_email(owner_name: str, owner_email: str, shop_name: str, 
     send_email(owner_email, owner_name, "Votre boutique a été validée", html)
 
 
-def send_shop_rejected_email(owner_name: str, owner_email: str, shop_name: str, reason: str | None = None) -> None:
-    register_url = f"{settings.FRONTEND_URL}/register"
+def send_shop_rejected_email(
+    owner_name: str,
+    owner_email: str,
+    shop_name: str,
+    reason: str | None = None,
+    frontend_url: str | None = None,
+) -> None:
+    register_url = f"{frontend_url or settings.FRONTEND_URL}/register"
     reason_html = f"<p><b>Motif :</b> {reason}</p>" if reason else ""
     html = _layout(
         title="Votre demande n'a pas été validée",

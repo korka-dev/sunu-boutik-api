@@ -60,7 +60,10 @@ async def register(
     db.add(user)
     db.commit()
 
-    background_tasks.add_task(send_signup_pending_emails, shop.name, user.full_name, user.email)
+    origin = request.headers.get("origin")
+    background_tasks.add_task(
+        send_signup_pending_emails, shop.name, user.full_name, user.email, origin
+    )
 
     return RegisterResponse(
         message="Votre demande a été enregistrée. Elle est en cours de traitement par notre équipe."
