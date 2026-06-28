@@ -13,6 +13,7 @@ router = APIRouter(prefix="/clients", tags=["clients"])
 def list_clients(
     page: int = 1,
     page_size: int = 10,
+    search: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -20,6 +21,8 @@ def list_clients(
     page_size = min(max(page_size, 1), 100)
 
     query = db.query(Client).filter(Client.shop_id == current_user.shop_id)
+    if search:
+        query = query.filter(Client.name.ilike(f"%{search}%"))
     total = query.count()
     items = (
         query.order_by(Client.name)

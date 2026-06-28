@@ -35,6 +35,7 @@ def _check_owned_category(category_id: int, db: Session, current_user: User) -> 
 def list_products(
     page: int = 1,
     page_size: int = 10,
+    search: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -46,6 +47,8 @@ def list_products(
         .options(joinedload(Product.category))
         .filter(Product.shop_id == current_user.shop_id)
     )
+    if search:
+        query = query.filter(Product.name.ilike(f"%{search}%"))
     total = query.count()
     items = (
         query.order_by(Product.name)

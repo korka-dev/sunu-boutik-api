@@ -19,14 +19,19 @@ def _generate_invoice_number(db: Session, shop_id: int) -> str:
 
 
 @router.get("", response_model=list[InvoiceOut])
-def list_invoices(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return (
+def list_invoices(
+    search: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = (
         db.query(Invoice)
         .options(joinedload(Invoice.lines))
         .filter(Invoice.shop_id == current_user.shop_id)
-        .order_by(Invoice.id.desc())
-        .all()
     )
+    if search:
+        query = query.filter(Invoice.number.ilike(f"%{search}%"))
+    return query.order_by(Invoice.id.desc()).all()
 
 
 @router.post("", response_model=InvoiceOut, status_code=201)
