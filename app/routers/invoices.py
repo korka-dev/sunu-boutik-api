@@ -1,5 +1,5 @@
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.models import Client, Invoice, InvoiceLine, Product, Shop, User
-from app.schemas.schemas import InvoiceCreate, InvoiceOut
+from app.schemas.schemas import InvoiceCreate, InvoiceLineCreate, InvoiceOut, InvoiceUpdate
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -21,6 +21,7 @@ def _generate_invoice_number(db: Session, shop_id: int) -> str:
 @router.get("", response_model=list[InvoiceOut])
 def list_invoices(
     search: str | None = None,
+    date: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -30,8 +31,59 @@ def list_invoices(
         .filter(Invoice.shop_id == current_user.shop_id)
     )
     if search:
-        query = query.filter(Invoice.number.ilike(f"%{search}%"))
+        query = query.filter(
+            (Invoice.number.ilike(f"%{search}%")) | (Invoice.client_name.ilike(f"%{search}%"))
+        )
+    if date:
+        try:
+            day_start = datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Date invalide, format attendu AAAA-MM-JJ")
+        day_end = day_start + timedelta(days=1)
+        query = query.filter(Invoice.created_at >= day_start, Invoice.created_at < day_end)
     return query.order_by(Invoice.id.desc()).all()
+
+
+def _apply_lines(
+    invoice: Invoice,
+    lines_payload: list[InvoiceLineCreate],
+    db: Session,
+    current_user: User,
+    revert_existing: bool = False,
+) -> None:
+    if revert_existing:
+        for old_line in list(invoice.lines):
+            product = db.query(Product).filter(Product.id == old_line.product_id).first()
+            if product:
+                product.quantity += old_line.quantity
+            db.delete(old_line)
+        db.flush()
+
+    total = 0.0
+    for line in lines_payload:
+        product = db.query(Product).filter(Product.id == line.product_id, Product.shop_id == current_user.shop_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Article {line.product_id} introuvable")
+        if line.quantity <= 0:
+            raise HTTPException(status_code=400, detail="La quantité doit être positive")
+        if product.quantity < line.quantity:
+            raise HTTPException(status_code=400, detail=f"Stock insuffisant pour {product.name}")
+
+        product.quantity -= line.quantity
+        unit_price = line.unit_price if line.unit_price is not None else product.unit_price
+        line_total = unit_price * line.quantity
+        total += line_total
+
+        db.add(InvoiceLine(
+            invoice_id=invoice.id,
+            product_id=product.id,
+            product_name=product.name,
+            quantity=line.quantity,
+            unit_price=unit_price,
+            line_total=line_total,
+        ))
+
+    invoice.total = total
 
 
 @router.post("", response_model=InvoiceOut, status_code=201)
@@ -44,9 +96,12 @@ def create_invoice(payload: InvoiceCreate, db: Session = Depends(get_db), curren
         if not client:
             raise HTTPException(status_code=404, detail="Client introuvable")
 
+    client_name = (payload.client_name or "").strip() or None
+
     invoice = Invoice(
         shop_id=current_user.shop_id,
         client_id=payload.client_id,
+        client_name=client_name if payload.client_id is None else None,
         number=_generate_invoice_number(db, current_user.shop_id),
         note=payload.note,
         total=0,
@@ -54,30 +109,8 @@ def create_invoice(payload: InvoiceCreate, db: Session = Depends(get_db), curren
     db.add(invoice)
     db.flush()
 
-    total = 0.0
-    for line in payload.lines:
-        product = db.query(Product).filter(Product.id == line.product_id, Product.shop_id == current_user.shop_id).first()
-        if not product:
-            raise HTTPException(status_code=404, detail=f"Article {line.product_id} introuvable")
-        if line.quantity <= 0:
-            raise HTTPException(status_code=400, detail="La quantité doit être positive")
-        if product.quantity < line.quantity:
-            raise HTTPException(status_code=400, detail=f"Stock insuffisant pour {product.name}")
+    _apply_lines(invoice, payload.lines, db, current_user)
 
-        product.quantity -= line.quantity
-        line_total = product.unit_price * line.quantity
-        total += line_total
-
-        db.add(InvoiceLine(
-            invoice_id=invoice.id,
-            product_id=product.id,
-            product_name=product.name,
-            quantity=line.quantity,
-            unit_price=product.unit_price,
-            line_total=line_total,
-        ))
-
-    invoice.total = total
     db.commit()
     db.refresh(invoice)
     return invoice
@@ -93,6 +126,38 @@ def get_invoice(invoice_id: int, db: Session = Depends(get_db), current_user: Us
     )
     if not invoice:
         raise HTTPException(status_code=404, detail="Facture introuvable")
+    return invoice
+
+
+@router.patch("/{invoice_id}", response_model=InvoiceOut)
+def update_invoice(invoice_id: int, payload: InvoiceUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    invoice = (
+        db.query(Invoice)
+        .options(joinedload(Invoice.lines))
+        .filter(Invoice.id == invoice_id, Invoice.shop_id == current_user.shop_id)
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Facture introuvable")
+
+    if not payload.lines:
+        raise HTTPException(status_code=400, detail="La facture doit contenir au moins un article")
+
+    if payload.client_id is not None:
+        client = db.query(Client).filter(Client.id == payload.client_id, Client.shop_id == current_user.shop_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client introuvable")
+
+    client_name = (payload.client_name or "").strip() or None
+
+    invoice.client_id = payload.client_id
+    invoice.client_name = client_name if payload.client_id is None else None
+    invoice.note = payload.note
+
+    _apply_lines(invoice, payload.lines, db, current_user, revert_existing=True)
+
+    db.commit()
+    db.refresh(invoice)
     return invoice
 
 
@@ -138,6 +203,8 @@ def get_invoice_pdf(invoice_id: int, db: Session = Depends(get_db), current_user
     elements.append(Paragraph(f"Date: {invoice.created_at.strftime('%d/%m/%Y %H:%M')}", styles["Normal"]))
     if client:
         elements.append(Paragraph(f"Client: {client.name}" + (f" - {client.phone}" if client.phone else ""), styles["Normal"]))
+    elif invoice.client_name:
+        elements.append(Paragraph(f"Client: {invoice.client_name}", styles["Normal"]))
     elements.append(Spacer(1, 6 * mm))
 
     data = [["Article", "Qté", "Prix unitaire", "Total"]]

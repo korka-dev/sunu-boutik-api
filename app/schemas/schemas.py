@@ -244,10 +244,19 @@ class ClientListOut(BaseModel):
 class InvoiceLineCreate(BaseModel):
     product_id: int
     quantity: float
+    unit_price: Optional[float] = Field(default=None, ge=0)
 
 
 class InvoiceCreate(BaseModel):
     client_id: Optional[int] = None
+    client_name: Optional[str] = None
+    note: Optional[str] = None
+    lines: list[InvoiceLineCreate]
+
+
+class InvoiceUpdate(BaseModel):
+    client_id: Optional[int] = None
+    client_name: Optional[str] = None
     note: Optional[str] = None
     lines: list[InvoiceLineCreate]
 
@@ -269,6 +278,7 @@ class InvoiceOut(BaseModel):
     id: int
     number: str
     client_id: Optional[int] = None
+    client_name: Optional[str] = None
     total: float
     note: Optional[str] = None
     created_at: datetime

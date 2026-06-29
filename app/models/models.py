@@ -105,6 +105,7 @@ class Invoice(Base):
     id = Column(Integer, primary_key=True, index=True)
     shop_id = Column(Integer, ForeignKey("shops.id"), nullable=False, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=True, index=True)
+    client_name = Column(String(150), nullable=True)
     number = Column(String(50), nullable=False)
     total = Column(Float, nullable=False, default=0)
     note = Column(Text, nullable=True)
