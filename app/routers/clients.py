@@ -22,7 +22,9 @@ def list_clients(
 
     query = db.query(Client).filter(Client.shop_id == current_user.shop_id)
     if search:
-        query = query.filter(Client.name.ilike(f"%{search}%"))
+        query = query.filter(
+            (Client.name.ilike(f"%{search}%")) | (Client.phone.ilike(f"%{search}%"))
+        )
     total = query.count()
     items = (
         query.order_by(Client.name)
@@ -43,7 +45,12 @@ def list_clients(
 
 @router.post("", response_model=ClientOut, status_code=201)
 def create_client(payload: ClientCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    client = Client(shop_id=current_user.shop_id, **payload.model_dump())
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom du client est requis")
+    data = payload.model_dump()
+    data["name"] = name
+    client = Client(shop_id=current_user.shop_id, **data)
     db.add(client)
     db.commit()
     db.refresh(client)
@@ -65,7 +72,12 @@ def get_client(client_id: int, db: Session = Depends(get_db), current_user: User
 @router.patch("/{client_id}", response_model=ClientOut)
 def update_client(client_id: int, payload: ClientUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     client = _get_owned_client(client_id, db, current_user)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if "name" in data:
+        data["name"] = (data["name"] or "").strip()
+        if not data["name"]:
+            raise HTTPException(status_code=400, detail="Le nom du client est requis")
+    for field, value in data.items():
         setattr(client, field, value)
     db.commit()
     db.refresh(client)
