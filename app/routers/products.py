@@ -44,11 +44,14 @@ def list_products(
 
     query = (
         db.query(Product)
+        .join(Category, Product.category_id == Category.id)
         .options(joinedload(Product.category))
         .filter(Product.shop_id == current_user.shop_id)
     )
     if search:
-        query = query.filter(Product.name.ilike(f"%{search}%"))
+        query = query.filter(
+            (Product.name.ilike(f"%{search}%")) | (Category.name.ilike(f"%{search}%"))
+        )
     total = query.count()
     items = (
         query.order_by(Product.name)
@@ -96,8 +99,13 @@ def product_stats(db: Session = Depends(get_db), current_user: User = Depends(ge
 
 @router.post("", response_model=ProductOut, status_code=201)
 def create_product(payload: ProductCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom de l'article est requis")
     _check_owned_category(payload.category_id, db, current_user)
-    product = Product(shop_id=current_user.shop_id, **payload.model_dump())
+    data = payload.model_dump()
+    data["name"] = name
+    product = Product(shop_id=current_user.shop_id, **data)
     db.add(product)
     db.commit()
     db.refresh(product)
@@ -125,6 +133,10 @@ def get_product(product_id: int, db: Session = Depends(get_db), current_user: Us
 def update_product(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     product = _get_owned_product(product_id, db, current_user)
     data = payload.model_dump(exclude_unset=True)
+    if "name" in data:
+        data["name"] = (data["name"] or "").strip()
+        if not data["name"]:
+            raise HTTPException(status_code=400, detail="Le nom de l'article est requis")
     if "category_id" in data:
         _check_owned_category(data["category_id"], db, current_user)
     for field, value in data.items():

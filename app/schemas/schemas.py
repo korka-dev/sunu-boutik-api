@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict, Field
 
 
 # ---------- Auth ----------
@@ -139,20 +139,20 @@ class ProductCreate(BaseModel):
     name: str
     category_id: int
     reference: Optional[str] = None
-    unit_price: float
-    quantity: float = 0
+    unit_price: float = Field(ge=0)
+    quantity: float = Field(default=0, ge=0)
     unit: str = "unite"
-    pack_size: float = 1
+    pack_size: float = Field(default=1, ge=1)
 
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     category_id: Optional[int] = None
     reference: Optional[str] = None
-    unit_price: Optional[float] = None
-    quantity: Optional[float] = None
+    unit_price: Optional[float] = Field(default=None, ge=0)
+    quantity: Optional[float] = Field(default=None, ge=0)
     unit: Optional[str] = None
-    pack_size: Optional[float] = None
+    pack_size: Optional[float] = Field(default=None, ge=1)
 
 
 class ProductOut(BaseModel):
